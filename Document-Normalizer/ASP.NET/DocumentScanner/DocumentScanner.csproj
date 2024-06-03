@@ -6,4 +6,8 @@
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
 
+  <ItemGroup>
+    <PackageReference Include="Dynamsoft.DotNet.DocumentNormalizer.Bundle" Version="2.2.1000" />
+  </ItemGroup>
+
 </Project>

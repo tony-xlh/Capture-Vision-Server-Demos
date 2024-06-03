@@ -1,3 +1,9 @@
+using Dynamsoft.Core;
+using Dynamsoft.License;
+string errorMsg;
+int errorCode = LicenseManager.InitLicense("DLS2eyJvcmdhbml6YXRpb25JRCI6IjIwMDAwMSJ9", out errorMsg);
+if (errorCode != (int)EnumErrorCode.EC_OK)
+    Console.WriteLine("License initialization error: " + errorMsg);
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
@@ -17,6 +23,7 @@ app.UseHttpsRedirection();
 app.UseStaticFiles();
 
 app.UseRouting();
+app.MapControllers();
 
 app.UseAuthorization();
 
