@@ -54,6 +54,8 @@ img {
 </div>
 
 <script>
+let imageID;
+registerEventsForCropper();
 function registerEventsForCropper(){
   console.log("register events");
   let cropper = document.querySelector("image-cropper");
@@ -63,6 +65,9 @@ function registerEventsForCropper(){
   }
   const confirmed = async () => {
     document.getElementById("cropper").style.display = "none";
+    let quad = await cropper.getQuad();
+    let cropResult = await crop(imageID,quad);
+    console.log(cropResult);
     document.body.style.overflow = "";
   }
   cropper.addEventListener("canceled",canceled);
@@ -102,6 +107,7 @@ async function openCropper(){
     console.log("set quad");
     let quad = detectionResult.polygon;
     cropper.quad = quad;
+    imageID = detectionResult.id;
     console.log(cropper.quad);
   }
   document.getElementById("status").innerText = "";
@@ -111,7 +117,7 @@ async function openCropper(){
 async function detectQuad(dataURL){
   let base64 = dataURL.substring(dataURL.indexOf(",")+1,dataURL.length);
   let url = "/api/document/detect";
-  data = {Base64:base64}
+  data = {Base64:base64};
   const response = await fetch(url, {
     method: "POST", 
     headers: {
@@ -120,7 +126,21 @@ async function detectQuad(dataURL){
     body: JSON.stringify(data),
   });
   let json = await response.json();
-  console.log(json);
+  return json;
+}
+
+async function crop(ID,polygon){
+  let url = "/api/document/crop";
+  data = {ID:ID,Polygon:polygon};
+  console.log(data);
+  const response = await fetch(url, {
+    method: "POST", 
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(data),
+  });
+  let json = await response.json();
   return json;
 }
 </script>

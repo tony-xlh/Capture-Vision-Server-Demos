@@ -23,10 +23,10 @@ namespace DocumentScanner
                 DetectedQuadsResult quads = result.GetDetectedQuadsResult();
                 Console.WriteLine("length:"+quads.GetItems().Length);
                 if (quads.GetItems().Length > 0) {
-                    Polygon polygon = ConvertPolygon(quads.GetItems()[0].GetLocation());
+                    Polygon polygon = ConvertToPolygon(quads.GetItems()[0].GetLocation());
                     detectedDocument.Polygon = polygon;
                 }
-                long ID = SaveImage(bytes);
+                long ID = SaveImage(bytes,false);
                 detectedDocument.ID = ID;
                 detectedDocument.Success = true;
             }
@@ -36,22 +36,27 @@ namespace DocumentScanner
         [HttpPost("crop")]
         public ActionResult<Document> CropDocument(Document document)
         {
-            Document detectedDocument = new Document();
-            if (document.Base64 != null)
+            Document croppedDocument = new Document();
+            Console.WriteLine(document.ID);
+            if (document.ID != null && document.Polygon != null)
             {
-
-                byte[] bytes = Convert.FromBase64String(document.Base64);
-                CapturedResult result = cvr.Capture(bytes, PresetTemplate.PT_DETECT_DOCUMENT_BOUNDARIES);
-                DetectedQuadsResult quads = result.GetDetectedQuadsResult();
-                Console.WriteLine("length:" + quads.GetItems().Length);
-                if (quads.GetItems().Length > 0)
+                string filePath = "./images/" + document.ID + ".jpg";
+                SimplifiedCaptureVisionSettings settings;
+                cvr.GetSimplifiedSettings(PresetTemplate.PT_NORMALIZE_DOCUMENT, out settings);
+                settings.roiMeasuredInPercentage = 1;
+                settings.roi = ConvertToQuad(document.Polygon);
+                CapturedResult result = cvr.Capture(filePath, PresetTemplate.PT_NORMALIZE_DOCUMENT);
+                NormalizedImagesResult normalizedImagesResult = result.GetNormalizedImagesResult();
+                Console.WriteLine("length:" + normalizedImagesResult.GetItems().Length);
+                if (normalizedImagesResult.GetItems().Length > 0)
                 {
-                    Polygon polygon = ConvertPolygon(quads.GetItems()[0].GetLocation());
-                    detectedDocument.Polygon = polygon;
+                    byte[] bytes = normalizedImagesResult.GetItems()[0].GetImageData().GetBytes();
+                    SaveImage(bytes,true);
                 }
-                detectedDocument.Success = true;
+                croppedDocument.ID = document.ID;
+                croppedDocument.Success = true;
             }
-            return detectedDocument;
+            return croppedDocument;
         }
 
         [HttpGet("{ID}")]
@@ -91,7 +96,7 @@ namespace DocumentScanner
             }
         }
 
-        private Polygon ConvertPolygon(Quadrilateral quad) {
+        private Polygon ConvertToPolygon(Quadrilateral quad) {
             Polygon polygon = new Polygon();
             Point[] points = new Point[4];
             points[0] = new Point(quad.points[0][0], quad.points[0][1]);
@@ -102,13 +107,29 @@ namespace DocumentScanner
             return polygon;
         }
 
-        private long SaveImage(byte[] bytes) {
+        private Quadrilateral ConvertToQuad(Polygon polygon)
+        {
+            Quadrilateral quadrilateral = new Quadrilateral();
+            quadrilateral.points[0] = new Dynamsoft.Core.Point(polygon.Points[0].X, polygon.Points[0].Y);
+            quadrilateral.points[1] = new Dynamsoft.Core.Point(polygon.Points[1].X, polygon.Points[1].Y);
+            quadrilateral.points[2] = new Dynamsoft.Core.Point(polygon.Points[2].X, polygon.Points[2].Y);
+            quadrilateral.points[3] = new Dynamsoft.Core.Point(polygon.Points[3].X, polygon.Points[3].Y);
+            return quadrilateral;
+        }
+
+        private long SaveImage(byte[] bytes,bool cropped) {
             if (Directory.Exists("images") == false) {
                 Directory.CreateDirectory("images");
             }
             DateTimeOffset dateTimeOffset = DateTimeOffset.UtcNow;
             long ID = dateTimeOffset.ToUnixTimeMilliseconds();
-            string filePath = "./images/"+ID+".jpg";
+            string filePath;
+            if (cropped) {
+                filePath = "./images/" + ID + "-cropped.jpg";
+            }
+            else {
+                filePath = "./images/" + ID + ".jpg";
+            }
             using (FileStream fs = new FileStream(filePath, FileMode.Create))
             {
                 fs.Write(bytes, 0, bytes.Length);
