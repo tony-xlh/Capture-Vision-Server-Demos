@@ -66,13 +66,38 @@ function registerEventsForCropper(){
   const confirmed = async () => {
     document.getElementById("cropper").style.display = "none";
     let quad = await cropper.getQuad();
+    useIntegerForQuad(quad);
     let cropResult = await crop(imageID,quad);
     console.log(cropResult);
+    if (cropResult.success == true) {
+      let response = await fetch("/api/document/cropped/"+imageID);
+      let text = await response.text();
+      displayCropped(text);
+    }else{
+      alert("Failed to get the cropped image");
+    }
     document.body.style.overflow = "";
   }
   cropper.addEventListener("canceled",canceled);
   cropper.addEventListener("confirmed",confirmed);
 }
+
+function useIntegerForQuad(quad) {
+  for (let index = 0; index < quad.points.length; index++) {
+    let point = quad.points[index];
+    point.x = Math.ceil(point.x);
+    point.y = Math.ceil(point.y);
+  }
+}
+
+function displayCropped(base64){
+  let container = document.getElementsByClassName("croppedImageContainer")[0];
+  container.innerHTML = "";
+  let image = document.createElement("img");
+  image.src = "data:image/jpeg;base64,"+base64;
+  container.appendChild(image);
+}
+
 function loadImageFromFile() { 
   let files = document.getElementById('file').files;
   if (files.length == 0) {

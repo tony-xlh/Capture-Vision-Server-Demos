@@ -1,6 +1,7 @@
 ﻿using Dynamsoft.Core;
 using Dynamsoft.CVR;
 using Dynamsoft.DDN;
+using Dynamsoft.Utility;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using System.IO;
@@ -26,7 +27,7 @@ namespace DocumentScanner
                     Polygon polygon = ConvertToPolygon(quads.GetItems()[0].GetLocation());
                     detectedDocument.Polygon = polygon;
                 }
-                long ID = SaveImage(bytes,false);
+                long ID = SaveImage(bytes);
                 detectedDocument.ID = ID;
                 detectedDocument.Success = true;
             }
@@ -37,24 +38,31 @@ namespace DocumentScanner
         public ActionResult<Document> CropDocument(Document document)
         {
             Document croppedDocument = new Document();
-            Console.WriteLine(document.ID);
             if (document.ID != null && document.Polygon != null)
             {
                 string filePath = "./images/" + document.ID + ".jpg";
                 SimplifiedCaptureVisionSettings settings;
                 cvr.GetSimplifiedSettings(PresetTemplate.PT_NORMALIZE_DOCUMENT, out settings);
-                settings.roiMeasuredInPercentage = 1;
+                settings.roiMeasuredInPercentage = 0;
                 settings.roi = ConvertToQuad(document.Polygon);
+                string errorMsg;
+                cvr.UpdateSettings(PresetTemplate.PT_NORMALIZE_DOCUMENT, settings, out errorMsg);
                 CapturedResult result = cvr.Capture(filePath, PresetTemplate.PT_NORMALIZE_DOCUMENT);
                 NormalizedImagesResult normalizedImagesResult = result.GetNormalizedImagesResult();
                 Console.WriteLine("length:" + normalizedImagesResult.GetItems().Length);
                 if (normalizedImagesResult.GetItems().Length > 0)
                 {
-                    byte[] bytes = normalizedImagesResult.GetItems()[0].GetImageData().GetBytes();
-                    SaveImage(bytes,true);
+                    ImageData imageData = normalizedImagesResult.GetItems()[0].GetImageData();
+                    ImageManager imageManager = new ImageManager();
+                    if (imageData != null)
+                    {
+                        int errorCode = imageManager.SaveToFile(imageData, "./images/" + document.ID + "-cropped.jpg");
+                        if (errorCode == 0) {
+                            croppedDocument.ID = document.ID;
+                            croppedDocument.Success = true;
+                        }
+                    }
                 }
-                croppedDocument.ID = document.ID;
-                croppedDocument.Success = true;
             }
             return croppedDocument;
         }
@@ -117,19 +125,14 @@ namespace DocumentScanner
             return quadrilateral;
         }
 
-        private long SaveImage(byte[] bytes,bool cropped) {
+        private long SaveImage(byte[] bytes) {
             if (Directory.Exists("images") == false) {
                 Directory.CreateDirectory("images");
             }
             DateTimeOffset dateTimeOffset = DateTimeOffset.UtcNow;
             long ID = dateTimeOffset.ToUnixTimeMilliseconds();
             string filePath;
-            if (cropped) {
-                filePath = "./images/" + ID + "-cropped.jpg";
-            }
-            else {
-                filePath = "./images/" + ID + ".jpg";
-            }
+            filePath = "./images/" + ID + ".jpg";
             using (FileStream fs = new FileStream(filePath, FileMode.Create))
             {
                 fs.Write(bytes, 0, bytes.Length);
