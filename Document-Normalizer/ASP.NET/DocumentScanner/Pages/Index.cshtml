@@ -38,7 +38,11 @@ img {
   Load local image:
   <input type="file" id="file" onchange="loadImageFromFile();" accept=".jpg,.jpeg,.png,.bmp" />
   <div>
-    <button onclick="openCropper()">Open Cropper</button>
+    <button onclick="performCrop()">Crop</button>
+    <label>
+      Enable Editing:
+      <input type="checkbox" id="enableEditing" checked/>
+    </label>
     <span id="status"></span>
   </div>
   <div>
@@ -118,6 +122,38 @@ function loadImageFromFile() {
   };
   fileReader.readAsDataURL(file);
 }
+
+async function performCrop(){
+  if (!document.getElementById("original")) {
+    return;
+  }
+  if (document.getElementById("enableEditing").checked) {
+    openCropper();
+  }else{
+    let url = "/api/document/detectAndCrop";
+    let dataURL = document.getElementById("original").src;
+    let base64 = dataURL.substring(dataURL.indexOf(",")+1,dataURL.length);
+    data = {Base64:base64};
+    const response = await fetch(url, {
+      method: "POST", 
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(data),
+    });
+    let json = await response.json();
+    
+    imageID = json.id;
+    if (json.success == true) {
+      let response = await fetch("/api/document/cropped/"+imageID);
+      let text = await response.text();
+      displayCropped(text);
+    }else{
+      alert("Failed to get the cropped Image.");
+    }
+  }
+}
+
 async function openCropper(){
   if (!document.getElementById("original")) {
     return;

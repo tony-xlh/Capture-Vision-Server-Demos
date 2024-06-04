@@ -22,8 +22,7 @@ namespace DocumentScanner
                 byte[] bytes = Convert.FromBase64String(document.Base64);
                 CapturedResult result = cvr.Capture(bytes, PresetTemplate.PT_DETECT_DOCUMENT_BOUNDARIES);
                 DetectedQuadsResult quads = result.GetDetectedQuadsResult();
-                Console.WriteLine("length:"+quads.GetItems().Length);
-                if (quads.GetItems().Length > 0) {
+                if (quads != null && quads.GetItems().Length > 0) {
                     Polygon polygon = ConvertToPolygon(quads.GetItems()[0].GetLocation());
                     detectedDocument.Polygon = polygon;
                 }
@@ -59,6 +58,37 @@ namespace DocumentScanner
                         int errorCode = imageManager.SaveToFile(imageData, "./images/" + document.ID + "-cropped.jpg");
                         if (errorCode == 0) {
                             croppedDocument.ID = document.ID;
+                            croppedDocument.Success = true;
+                        }
+                    }
+                }
+            }
+            return croppedDocument;
+        }
+
+        [HttpPost("detectAndCrop")]
+        public ActionResult<Document> DetectAndCropDocument(Document document)
+        {
+            Document croppedDocument = new Document();
+            if (document.Base64 != null)
+            {
+                Console.WriteLine(document.Base64);
+                byte[] bytes = Convert.FromBase64String(document.Base64);
+                CapturedResult result = cvr.Capture(bytes, PresetTemplate.PT_DETECT_AND_NORMALIZE_DOCUMENT);
+                Console.WriteLine("length: " + result.GetItems().Length);
+                NormalizedImagesResult normalizedImagesResult = result.GetNormalizedImagesResult();
+                if (normalizedImagesResult != null && normalizedImagesResult.GetItems().Length > 0)
+                {
+                    DateTimeOffset dateTimeOffset = DateTimeOffset.UtcNow;
+                    long ID = dateTimeOffset.ToUnixTimeMilliseconds();
+                    ImageData imageData = normalizedImagesResult.GetItems()[0].GetImageData();
+                    ImageManager imageManager = new ImageManager();
+                    if (imageData != null)
+                    {
+                        int errorCode = imageManager.SaveToFile(imageData, "./images/" + ID + "-cropped.jpg");
+                        if (errorCode == 0)
+                        {
+                            croppedDocument.ID = ID;
                             croppedDocument.Success = true;
                         }
                     }
