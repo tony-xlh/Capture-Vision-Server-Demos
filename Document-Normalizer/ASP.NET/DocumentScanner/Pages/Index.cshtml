@@ -1,0 +1,207 @@
+﻿@page
+@model IndexModel
+@{
+    ViewData["Title"] = "Home page";
+}
+<style>
+* {
+  padding:0;
+  margin:0;
+}
+
+body {
+  -ms-content-zooming: none;
+}
+
+img {
+  max-width: 100%;
+  max-height: 350px;
+  margin-bottom: 1em;
+  display: block;
+}
+
+#cropper {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+}
+</style>
+<script type="module">
+  import { defineCustomElements } from 'https://cdn.jsdelivr.net/npm/image-cropper-component/dist/esm/loader.js';
+  defineCustomElements();
+</script>
+
+<div>
+  <h2>Document Image Cropper Demo</h2>
+  Load local image:
+  <input type="file" id="file" onchange="loadImageFromFile();" accept=".jpg,.jpeg,.png,.bmp" />
+  <div>
+    <button onclick="performCrop()">Crop</button>
+    <label>
+      Enable Editing:
+      <input type="checkbox" id="enableEditing" checked/>
+    </label>
+    <span id="status"></span>
+  </div>
+  <div>
+    <div>Original:</div>
+    <div class="orginalImageContainer"></div>
+    <div>Cropped:</div>
+    <div class="croppedImageContainer">
+    </div>
+  </div>
+  <div id="cropper" style="display:none;">
+    <image-cropper style="--active-stroke:5;--active-color:orange;--inactive-color:orange;"></image-cropper>
+  </div>
+</div>
+
+<script>
+let imageID;
+registerEventsForCropper();
+function registerEventsForCropper(){
+  console.log("register events");
+  let cropper = document.querySelector("image-cropper");
+  const canceled = () => {
+    document.getElementById("cropper").style.display = "none";
+    document.body.style.overflow = "";
+  }
+  const confirmed = async () => {
+    document.getElementById("cropper").style.display = "none";
+    let quad = await cropper.getQuad();
+    useIntegerForQuad(quad);
+    let cropResult = await crop(imageID,quad);
+    console.log(cropResult);
+    if (cropResult.success == true) {
+      let response = await fetch("/api/document/cropped/"+imageID);
+      let text = await response.text();
+      displayCropped(text);
+    }else{
+      alert("Failed to get the cropped image");
+    }
+    document.body.style.overflow = "";
+  }
+  cropper.addEventListener("canceled",canceled);
+  cropper.addEventListener("confirmed",confirmed);
+}
+
+function useIntegerForQuad(quad) {
+  for (let index = 0; index < quad.points.length; index++) {
+    let point = quad.points[index];
+    point.x = Math.ceil(point.x);
+    point.y = Math.ceil(point.y);
+  }
+}
+
+function displayCropped(base64){
+  let container = document.getElementsByClassName("croppedImageContainer")[0];
+  container.innerHTML = "";
+  let image = document.createElement("img");
+  image.src = "data:image/jpeg;base64,"+base64;
+  container.appendChild(image);
+}
+
+function loadImageFromFile() { 
+  let files = document.getElementById('file').files;
+  if (files.length == 0) {
+    return;
+  }
+  let file = files[0];
+  fileReader = new FileReader();
+  fileReader.onload = function(e){
+    let container = document.getElementsByClassName("orginalImageContainer")[0];
+    container.innerHTML = "";
+    let img = document.createElement("img");
+    img.src = e.target.result;
+    img.id = "original";
+    container.appendChild(img);
+  };
+  fileReader.onerror = function () {
+    console.warn('oops, something went wrong.');
+  };
+  fileReader.readAsDataURL(file);
+}
+
+async function performCrop(){
+  if (!document.getElementById("original")) {
+    return;
+  }
+  if (document.getElementById("enableEditing").checked) {
+    openCropper();
+  }else{
+    let url = "/api/document/detectAndCrop";
+    let dataURL = document.getElementById("original").src;
+    let base64 = dataURL.substring(dataURL.indexOf(",")+1,dataURL.length);
+    data = {Base64:base64};
+    const response = await fetch(url, {
+      method: "POST", 
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(data),
+    });
+    let json = await response.json();
+    
+    imageID = json.id;
+    if (json.success == true) {
+      let response = await fetch("/api/document/cropped/"+imageID);
+      let text = await response.text();
+      displayCropped(text);
+    }else{
+      alert("Failed to get the cropped Image.");
+    }
+  }
+}
+
+async function openCropper(){
+  if (!document.getElementById("original")) {
+    return;
+  }
+  document.body.style.overflow = "hidden";
+  let cropper = document.querySelector("image-cropper");
+  cropper.img = document.getElementById("original");
+  cropper.inactiveSelections = [];
+  document.getElementById("status").innerText = "Detecting...";
+  let detectionResult = await detectQuad(cropper.img.src);
+  if (detectionResult.success == true) {
+    console.log("set quad");
+    let quad = detectionResult.polygon;
+    cropper.quad = quad;
+    imageID = detectionResult.id;
+    console.log(cropper.quad);
+  }
+  document.getElementById("status").innerText = "";
+  document.getElementById("cropper").style.display = "";
+}
+
+async function detectQuad(dataURL){
+  let base64 = dataURL.substring(dataURL.indexOf(",")+1,dataURL.length);
+  let url = "/api/document/detect";
+  data = {Base64:base64};
+  const response = await fetch(url, {
+    method: "POST", 
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(data),
+  });
+  let json = await response.json();
+  return json;
+}
+
+async function crop(ID,polygon){
+  let url = "/api/document/crop";
+  data = {ID:ID,Polygon:polygon};
+  console.log(data);
+  const response = await fetch(url, {
+    method: "POST", 
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(data),
+  });
+  let json = await response.json();
+  return json;
+}
+</script>
