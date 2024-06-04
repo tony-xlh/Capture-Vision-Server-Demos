@@ -10,3 +10,4 @@ Backend API:
 * GET `/api/Document/{ID}`
 * GET `/api/Document/cropped/{ID}`
 
+![localhost_7158_](https://github.com/xulihang/Capture-Vision-Server-Demos/assets/5462205/b9463f0d-0120-4c68-a812-96b769c3cd92)
